@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang=""en>
+    <head>
+        <meta charset="UTF-8">
+    <title>Weather Lookup</title>
+    <style>
+        body { font-family: sans-serif; margin: 40px; }
+        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; width: 300px; }
+        .error { color: red; }
+    </style>
+    </head>
+    <body>
+        <div class="card">
+        <h2>Weather Search</h2>
+        
+        <!-- Form submits via POST to /get-weather -->
+        <form action="/get-weather" method="post">
+            <input 
+                type="text" 
+                name="city" 
+                placeholder="Enter city (e.g. Benton Harbor)" 
+                value="{{ city if city else '' }}"
+                required
+            />
+            <button type="submit">Get Weather</button>
+        </form>
+
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+
+        {% if weather %}
+            <hr>
+            <h3>Result for {{ city }}:</h3>
+            <p><strong>Condition:</strong> {{ weather.condition }}</p>
+            <p><strong>Temperature:</strong> {{ weather.temp }}°F</p>
+            <p><strong>Feels Like:</strong> {{ weather.feels_like }}°F</p>
+        {% endif %}
+    </body>
+    
+</html>

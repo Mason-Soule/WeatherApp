@@ -3,46 +3,43 @@ from typing import Optional, cast
 
 import requests
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, status, Request, Form
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request, Form
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from geopy.geocoders import Nominatim
-from geopy.location import Location
 
 app = FastAPI()
 templates = Jinja2Templates(directory="templates")
 
 
 class Weather:
-    def __init__(self, condition, temp, feels_like):
-        self.condition = condition
-        self.temp = temp
-        self.feels_like = feels_like
+    def __init__(self, weather_data, city):
+        self.favorites = []
+        self.weather = weather_data
+        self.city = city
+        self.condition = weather_data.json()["weather"][0]["main"]
+        self.temp = weather_data.json()["main"]["temp"]
+        self.feels_like = weather_data.json()["main"]["feels_like"]
+        self.humidity = weather_data.json()["main"]["humidity"]
 
     def format(self):
         return {
-            "Condition": self.condition,
+            "city": self.city,
+            "condition": self.condition,
             "temp": self.temp,
             "feels_like": self.feels_like,
+            "humidity": self.humidity,
         }
 
-
-def geo_data(city: str) -> Optional[Location]:
-    # Initalizes the Nominatim tool so that we can find the geolocation of a place (lat, long)
-    geolocator = Nominatim(user_agent="my_weather_app")
-
-    # Uses the geopy library to get the latitude and longitude of the location the user enterd
-    # Casts the return value to Location | None instead of Coroutine. This satisfies type checker.
-    return cast(Optional[Location], geolocator.geocode(city))
+    def favorite(self, city):
+        self.favorites.append(city)
 
 
-def get_weather_data(lat, lon):
+def get_weather_data(city):
+
     load_dotenv(dotenv_path=".env")
     # Calls the weather API using the request library
     return requests.get(
-        f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&units=imperial&appid={os.getenv('OPEN_WEATHER_API_KEY')}"
+        f"https://api.openweathermap.org/data/2.5/weather?q={city}&units=imperial&appid={os.getenv('OPEN_WEATHER_API_KEY')}"
     )
 
 
@@ -60,39 +57,19 @@ def home(request: Request):
 def get_weather(request: Request, city: str = Form(...)):
     # Using the dotenv library I can create the path to my file so that I can access my API key
     # When I need it
-    try:
-        location: Optional[Location] = geo_data(city)
-        if location is None:
-            return templates.TemplateResponse(
-                request,
-                "index.html",
-                {
-                    "weather": None,
-                    "error": f"'{city}' Note Found",
-                },
-            )
+    weather_data = get_weather_data(city)
 
-        lat, lon = location.latitude, location.longitude
+    if weather_data.status_code != 200:
+        return templates.TemplateResponse(
+            request,
+            "index.html",
+            {
+                "weather": None,
+                "error": f"API could not find '{city}'",
+            },
+        )
 
-        weather_data = get_weather_data(lat, lon)
-
-        if weather_data.status_code != 200:
-            return templates.TemplateResponse(
-                request,
-                "index.html",
-                {
-                    "weather": None,
-                    "error": f"API could not find '{city}'",
-                },
-            )
-
-        condition = weather_data.json()["weather"][0]["main"]
-        temp = weather_data.json()["main"]["temp"]
-        feels_like = weather_data.json()["main"]["feels_like"]
-        error = None
-
-        weather = Weather(condition, temp, feels_like)
-        return templates.TemplateResponse(request, "index.html", {"weather": weather.format(), "error": None})
-
-    except ValueError as e:
-        print(e)
+    weather = Weather(weather_data, city)
+    return templates.TemplateResponse(
+        request, "index.html", {"weather": weather.format(), "error": None}
+    )
